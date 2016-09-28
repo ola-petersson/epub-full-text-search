@@ -1,0 +1,55 @@
+	service-simplified.js
+
+// eventuellt måste epub-pathen ändras på line 98 och 102 för att passa var böckerna finns
+
+// introducera variabel searchText som skickas med ända till CFI.js 
+3 	var searchText; 
+33	searchText = req.query['q'].toLowerCase();
+44 	se.search(searchText, q, bookTitle, function (result) {
+
+
+// ta bort alla tecken som inte är text eller siffror och ersätt med " " och sen splitta. 
+// Detta gör att man kan söka på typ allt, men ingen hänsyn tas till speciasltecken, och ta även bort å, ä ,ö 
+
+36 	var q = req.query['q'].toLowerCase().replace(/[\|' \.,\-|(\n)]+/, " ").split(/\s+/);
+
+
+
+
+	SearchEngine.js
+
+// skicka vidare searchText 
+85     	SearchEngine.search = function (searchText, q, epubTitle, callback) {
+126 	var cfiList = cfi.generate(searchText, data);
+
+
+// kolla om den epub-bok man skickat med vid anrop (download_link) matchar något i spineitem 
+// spiuneItem är sökvägen till den bok som nu kontrolleras. 
+// Om ingen sökväg skickas med ges resultat i alla böcker. 
+
+118	(add) if (result.hits[i].document.spineItemPath.indexOf(epubTitle) !== -1 ||  epubTitle === '*') { 
+	(delete) if (title === epubTitle || epubTitle === '*') {
+
+// 	skicka med att stopwords = [] i sökningen
+	(add)		stopwords = [];
+	(delete) 	SearchEngine.si.search(query, function (err, result) {
+	(add) 		SearchEngine.si.search(query, stopwords, function (err, result) {
+
+
+	CFI.js
+
+// hantera searchText igen
+9	exports.generate = function (searchText, data) {
+22 	var elements = getElementsThatContainsQuery(searchText, data.query, $);
+
+
+// macha endast den del i dokumentet som passar hela söktexten (default är att ett resultat ge resultyat på alla ställen där första ordet finns, på de sidor där alla ord finns)
+95 	(add) return (this.nodeType === 3 && $(this).text().toLowerCase().search(searchText) > -1);
+96 	(delete) return (this.nodeType === 3 && $(this).text().toLowerCase().indexOf(query[0]) > -1);
+
+
+	searcher.js
+sudo nano node_modules/search-index/node_modules/search-index-searcher/searcher.js  
+22 (delete) 	Searcher.search = function(q, callback) {
+22 (add) 	Searcher.search = function(q, stopwords, callback) {
+23 (add)	options.stopwords = stopwords;

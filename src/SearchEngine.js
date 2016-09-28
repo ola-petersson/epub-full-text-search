@@ -1,154 +1,244 @@
-'use strict';
+// * phrase search 
+// * html teaser with tagged match
 
-const DEFAULT_EPUB_TITLE = '*';
-
-const searchIndexSource = require('search-index'),
-    Q = require('q'),
-    searchIndex = Q.denodeify(searchIndexSource),
-    colors = require('colors'),
-    path = require('path'),
-    fs = require('extfs'),
-    _ = require('lodash'),
-    preparer = require('./Preparer.js'),
-    cfi = require('./CFI.js');
-
-
-module.exports = function (options) {
-
+module.exports = function (options, callback) {
+var reA = /[^a-zA-Z]/g;
+		var reN = /[^0-9]/g;
+		function sortAlphaNumObj(a,b) {
+			var aA = a.href.replace(reA, "");
+			var bA = b.href.replace(reA, "");
+			if(aA === bA) {
+				var aN = parseInt(a.href.replace(reN, ""), 10);
+				var bN = parseInt(b.href.replace(reN, ""), 10);
+				return aN === bN ? 0 : aN > bN ? 1 : -1;
+			} else {
+				return aA > bA ? 1 : -1;
+			}
+		}function sortAlphaNumList(a,b) {
+			var aA = a.replace(reA, "");
+			var bA = b.replace(reA, "");
+			if(aA === bA) {
+				var aN = parseInt(a.replace(reN, ""), 10);
+				var bN = parseInt(b.replace(reN, ""), 10);
+				return aN === bN ? 0 : aN > bN ? 1 : -1;
+			} else {
+				return aA > bA ? 1 : -1;
+			}
+		}
     var SearchEngine = {};
+    const searchIndex = require('search-index');
+    const path = require('path');
+    const fs = require('extfs');
+    const Q = require('q');
+    const _ = require('lodash');
+
+    const preparer = require('./Preparer.js');
+    const cfi = require('./CFI.js');
 
     const INDEX_DB = 'full-text-search-DB'; // path to index-db 
     var defaultOption = {'indexPath': INDEX_DB};
     var options = _.isEmpty(options) ? defaultOption : options;
 
-    SearchEngine.indexing = function (pathToEpubs) {
+    const DEFAULT_EPUB_TITLE = '*';
+
+
+    searchIndex(options, function (err, si) {
+
+        if (err) 
+            return callback(err, null)
+
+        SearchEngine.si = si;
+        return callback(null, SearchEngine)
+        
+    });
+
+    SearchEngine.indexing = function (pathToEpubs, callback) {
 
         if (fs.isEmptySync(pathToEpubs)) {
-            return Q.reject(new Error('Can`t index empty folder: ' + pathToEpubs));
+            return callback(new Error('Can`t index empty folder: ' + pathToEpubs));
         }
-        console.log("\n\n\n******************************************************\n");
-        console.log("Start Normalize epub content\n\n".yellow);
+        console.log("******************************************************");
+        console.log("Step 1");
+        console.log("start normalize epub content");
 
-        // normalize the directory path
-        pathToEpubs = path.normalize(pathToEpubs);
+        path.normalize(pathToEpubs);
 
-        return preparer.normalize(pathToEpubs)
-            .then(function (dataSet) {
-                console.log("\n******************************************************\n");
-                console.log("Ready Normalize epub content\n\n".yellow);
+        preparer.normalize(pathToEpubs, function (dataSet) {
 
-                if (dataSet.length > 0)
-                    console.log("Start writing epub-data to index.");
-                else {
-                    console.log("DONE! Nothing to do, epubs already indexed.\n\n");
-                    return;
+            console.log("ready normalize epub content");
+            console.log("******************************************************");
+            console.log("Step 2");
+            console.log("start indexing");
+            SearchEngine.add(dataSet, function (err) {
+                //console.log(dataSet);
+                if (callback) {
+                    if (err)
+                        callback(err);
+                    else
+                        callback('all is indexed');
                 }
-
-                return SearchEngine.add(dataSet);
             });
+            //callback('all is indexed');
+        });
     };
 
-    SearchEngine.add = function (jsonDoc) {
+    SearchEngine.add = function (jsonDoc, callback) {
 
         var ids = jsonDoc.FirstSpineItemsId;
         delete jsonDoc.FirstSpineItemsId;
 
-        return SearchEngine._add(jsonDoc, getIndexOptions());
+        shouldRebuildIndexes(ids, function (rebuild) {
+            // check is rebuild indexes necessary -> speed up the auto start
+            // Reasons to rebuild the index can be:
+            // * new epub content should be index
+            // * index will be generating first time  
+
+            if (rebuild) {
+                //    var s = fs.createWriteStream('add.json');
+                //    s.write(JSON.stringify(jsonDoc));
+                //    s.end();
+                var opt = getIndexOptions();
+                SearchEngine.si.add(jsonDoc, opt, callback);
+            } else
+                return callback();
+        });
     };
 
-    SearchEngine.search = function (q, epubTitle) {
-        epubTitle = epubTitle || DEFAULT_EPUB_TITLE; // if epubTitle undefined return all hits
+    SearchEngine.search = function (searchText, q, epubTitle, callback) {
+	
+	
+	
+        var epubTitle = epubTitle || DEFAULT_EPUB_TITLE; // if epubTitle undefined return all hits
+
         // q is an array !!!
         var query = {
-            query: [{
-                AND: {body: [q]}
-            }],
-            offset: 0,
-            pageSize: 100
+            "query": {"body": q},
+            "offset": 0,
+            "pageSize": Infinity
         };
+	var stopwords = [];
 
-        if(epubTitle) {
-            query.query.push({AND: {epubTitle: [epubTitle]}});
-        }
-
-        return SearchEngine.query(query, q);
-    };
-
-    SearchEngine.query = function(query, search) {
-        return SearchEngine._search(query)
-            .then(function (result) {
+        SearchEngine.si.search(query, stopwords, function (err, result) {
+		var allCfis = [];
+		var arr = [];
+		
+            if (err)
+                console.error(err);
+            if (result.hits) {
                 var hits = [];
+                for (var i in result.hits) { // alla resultat söks igenom men barade som matchar ebubtitle returneras
 
-                if (!result.hits) {
-                    return hits;
+                    // id = spineitemId:epubTitle 
+                    var title = result.hits[i].document.id.split(':')[1]; // man kan sätta till lower case om man vill .toLowerCase() 
+                   
+                    result.hits[i].document.id = result.hits[i].document.id.split(':')[0];
+
+
+                    //if (title === epubTitle || epubTitle === '*') {
+                    var listOfArguments = result.hits[i].document.spineItemPath.split('/');
+                   
+			if (listOfArguments.indexOf(epubTitle) !== -1 ||  epubTitle === '*') { // kolla om det du skickat med (download_link) matchar något i splineitem 
+                        //console.log(result.hits[i]);
+ 			//console.log('epubTitele =' + epubTitle)
+                        var data = {
+                            "query": q,
+                            "spineItemPath": result.hits[i].document.spineItemPath,
+                            "baseCfi": result.hits[i].document.baseCfi
+                            
+                        };
+						//console.log(result.hits[i].document.spineItemPath);
+						var cfiList = cfi.generate(searchText, data);
+						if (cfiList.length > 0) {
+							hits.push(result.hits[i].document);
+							result.hits[i].document.cfis = cfiList;
+							hits.sort(sortAlphaNumObj);
+							delete result.hits[i].document['*'];
+							delete result.hits[i].document.spineItemPath;
+						}
+						
+						
+					}	
                 }
-
-                result.hits.forEach(function(hit) {
-                    var document = hit.document,
-                        idData = document.id.split(':'),
-                        title = idData[1];
-
-                    document.id = idData[0];
-
-                    var cfiList = cfi.generate({
-                        "query": [search],
-                        "spineItemPath": document.spineItemPath,
-                        "baseCfi": document.baseCfi
-                    });
-
-                    if (cfiList.length > 0) {
-                        document.cfis = cfiList;
-                        delete document['*'];
-                        delete document.spineItemPath;
-
-                        hits.push(document);
-                    }
-
-                });
-                return hits;
-            });
+           		
+			callback(hits);
+			
+            }
+        })
     };
 
-    SearchEngine.match = function (beginsWith, epubTitle) {
+    SearchEngine.match = function (beginsWith, epubTitle, callback) {
 
         if (!_.isString(epubTitle) && !_.isNull(epubTitle))
             console.error('epubTitle should be null or type string');
 
         var epubTitle = epubTitle || DEFAULT_EPUB_TITLE;
 
-        return SearchEngine._match({beginsWith: beginsWith, type: 'ID'})
-            .then(function(matches) {
-                return filterMatches(matches, epubTitle);
+        SearchEngine.si.match({beginsWith: beginsWith, type: 'ID'},
+
+            function (err, matches) {
+                return callback(err, filterMatches(matches, epubTitle));
             });
     };
 
-    SearchEngine.empty = function () {
-        return SearchEngine._empty();
+    SearchEngine.empty = function (callback) {
+        SearchEngine.si.empty(callback);
     };
 
-    SearchEngine.close = function () {
-        return SearchEngine._close();
+    SearchEngine.close = function (callback) {
+        SearchEngine.si.close(callback);
     };
+
 
     // private 
     function getIndexOptions() {
-        return {
-            fieldOptions: [
-                {fieldName: 'epubTitle', searchable: false, store: true},
-                {fieldName: 'spineItemPath', searchable: false, store: true},
-                {fieldName: 'href', searchable: false, store: true},
-                {fieldName: 'baseCfi', searchable: false, store: true},
-                {fieldName: 'id', searchable: false, store: true},
-                {fieldName: 'filename', searchable: true, store: true},
-                {fieldName: 'title', searchable: true, store: false},
-                {fieldName: 'body', searchable: true, store: false}
-            ]
-        };
+
+        var options = {};
+        options.filters = [];
+        options.fieldsToStore = ['id', 'spineItemPath', 'href', 'baseCfi', 'epubTitle'];
+	options.stopwords = [];
+        options.fieldOptions = [
+            {fieldName: 'epubTitle', searchable: false},
+            {fieldName: 'spineItemPath', searchable: false},
+            {fieldName: 'href', searchable: false},
+            {fieldName: 'baseCfi', searchable: false},
+            {fieldName: 'id', searchable: false}
+        ];
+        return options;
+    }
+
+    function shouldRebuildIndexes(ids, callback) {
+
+        getIndexes(ids, function (results) {
+
+            for (var i in results) {
+                if (results[i].state === 'fulfilled' && results[i].value === null) {
+                    console.log("It is necessary to (re)build indexes!");
+                    return callback(true);
+                }
+            }
+            console.log("It is not necessary to rebuild indexes.");
+            return callback(false); // ändra till false om man inte vill reindexera allt varje gång 
+        });
+    }
+
+    function getIndexes(ids, callback) {
+
+        var promises = [];
+
+        ids.forEach(function (id) {
+            var deferred = Q.defer();
+            SearchEngine.si.get(id, function (err, result) {
+                deferred.resolve(result);
+            });
+            promises.push(deferred.promise);
+        });
+
+        return Q.allSettled(promises).then(callback);
     }
 
     function filterMatches(matches, epubTitle) {
 
-        return matches
+        var result = matches
             .map(function (match) {
 
                 if (epubTitle === '*') {
@@ -163,16 +253,6 @@ module.exports = function (options) {
                 }
             })
             .filter(Boolean); // filter ["", "", ""] -> []
+        return result;
     }
-
-    return searchIndex(options)
-        .then(function (si) {
-            SearchEngine.si = si;
-            SearchEngine._search = Q.nbind(si.search, si);
-            SearchEngine._close = Q.nbind(si.close, si);
-            SearchEngine._empty = Q.nbind(si.empty, si);
-            SearchEngine._match = Q.nbind(si.match, si);
-            SearchEngine._add = Q.nbind(si.add, si);
-            return SearchEngine;
-        });
 };

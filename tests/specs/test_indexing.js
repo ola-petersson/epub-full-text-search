@@ -1,34 +1,15 @@
-const should = require('should'),
-    rimraf = require('rimraf'),
-    fs = require('fs'),
-    searchEngine = require('../../'),
-    constants = require("../../src/Constants"),
-    init = require('../init');
+const should = require('should');
+const rimraf = require('rimraf');
+const fs = require('fs');
+
+const searchEngine = require('../../');
+
+const EPUB = 'node_modules/epub3-samples';
+const TEST_DB = 'mocha_test_DB'; // TODO: process.env.TEST_DB
 
 describe('indexing ', function () {
 
-    var se;
-
-    beforeEach(function(done) {
-        this.timeout(10000);
-        init()
-            .then(function() {
-                return searchEngine({'indexPath': constants.TEST_DB});
-            })
-            .then(function(_se) {
-                se = _se;
-                done();
-            })
-            .fail(done);
-    });
-
-    afterEach(function(done) {
-        se.close()
-            .then(function() {
-                done();
-            })
-            .fail(done);
-    });
+    rimraf.sync(TEST_DB);
 
     it('check directory is empty', function (done) {
 
@@ -37,23 +18,38 @@ describe('indexing ', function () {
         var emptyDir = 'emptyDir';
         fs.mkdirSync(emptyDir);
 
-        se.indexing(emptyDir)
-            .then(function (info) {
-                done('Indexing was not rejected');
-            })
-            .fail(function(err) {
+        searchEngine({'indexPath': TEST_DB}, function (err, se) {
+
+            if (err)
+                return console.log(err);
+
+            se.indexing(emptyDir, function (info) {
+
                 fs.rmdirSync(emptyDir);
-                (err instanceof Error).should.be.true();
-                done();
+                se.close(function () {
+                    //console.log(info);
+                    (info instanceof Error).should.be.true();
+                    done();
+                });
             });
+        });
     });
 
     it('should index all epubs from passed argument path', function (done) {
 
-        this.timeout(100000);
-        se.indexing(constants.EPUB)
-            .then(function () {
-                done();
+        this.timeout(20000);
+
+        searchEngine({'indexPath': TEST_DB}, function (err, se) {
+
+            if (err)
+                return console.log(err);
+
+            se.indexing(EPUB, function () {
+
+                se.close(function () {
+                    done();
+                });
             });
+        });
     });
 });

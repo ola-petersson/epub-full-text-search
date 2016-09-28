@@ -1,63 +1,54 @@
 const fs = require('fs'),
     cheerio = require('cheerio'),
-    parser = require('./EpubMetaDataParser'),
-    indexingController = require('./IndexingController')();
+    parser = require('./Parser.js');
 
+exports.normalize = function (pathToEpubs, callBack) {
 
-exports.normalize = function (pathToEpubs) {
+    process.stdout.write('epub data folder: '.red + pathToEpubs.green + '\n');
 
-    console.log('epub data folder: '.red + pathToEpubs.green + '\n\n');
+    parser.getMetaDatas(pathToEpubs, function (metaDataList) {
 
-    return parser.getMetaDatas(pathToEpubs)
-        .then(function (metaDataList) {
+            //console.log(metaDataList);
+            console.log("------------------------------------------------------");
 
-            console.log('Analyse folder:'.yellow + '\n');
+            process.stdout.write('epub title(s) found:'.yellow + '\n');
 
-            metaDataList = indexingController.doWork(metaDataList);
+            var dataSet = new Array();
+            for (metaData in metaDataList) {
 
-            var dataSet = [];
+                for (var i = 0; i < metaDataList[metaData].spineItems.length; i++) {
 
-            metaDataList.forEach(function(metaData) {
-                //console.log(metaDataList[metaData].title + "   " + metaDataList[metaData].writeToIndex);
-                var title = metaData.title;
+                    if (i === 0) {
+                        if (!dataSet.FirstSpineItemsId)
+                            dataSet.FirstSpineItemsId = new Array();
+                        dataSet.FirstSpineItemsId.push(
+                            metaDataList[metaData].spineItems[i].id + ':' + metaDataList[metaData].title
+                        );
 
-                if (metaData.writeToIndex) {
-                    console.log("\t--> epub title " + title.bold.blue + ' will be added to index \n');
+                        process.stdout.write("\t-->  ".blue + metaDataList[metaData].title.blue + '\n');
+                    }
 
-                    prepareEpubDataForIndexing(metaData, dataSet);
-                } else {
-                    console.log("\t--> epub title " + title.green + ' already indexed \n');
+                    var spineItem = metaDataList[metaData].manifestPath + '/' + metaDataList[metaData].spineItems[i].href;
+                    //console.log('transform file ' + file + ' to index format **** basecfi: ' +  metaDataList[metaData].spineItems[i].baseCfi);
+
+                    var json = htmlToJSON(spineItem);
+
+                    setMetaData(json, metaDataList[metaData], metaDataList[metaData].spineItems[i]);
+
+                    dataSet.push(json);
+                    //console.log(json);
                 }
-            });
-            return dataSet;
-        });
+            }
+
+            //console.log(dataSet);
+            console.log("------------------------------------------------------");
+            callBack(dataSet);
+        }
+    )
 };
 
-
-function prepareEpubDataForIndexing(metaData, data) {
-    if(!metaData.spineItems.length) {
-        return;
-    }
-
-    if (!data.FirstSpineItemsId) {
-        data.FirstSpineItemsId = [];
-    }
-
-    data.FirstSpineItemsId.push(
-        metaData.spineItems[0].id + ':' + metaData.title
-    );
-
-    metaData.spineItems.forEach(function(spineItem) {
-        var spineItemPath = metaData.manifestPath + '/' + spineItem.href;
-        var json = htmlToJSON(spineItemPath);
-        setMetaData(json, metaData, spineItem);
-        data.push(json);
-    });
-}
-
-
 function setMetaData(jsonDoc, meta, spineItemMeta) {
-    jsonDoc.filename = meta.filename;
+
     jsonDoc.epubTitle = meta.title;
     jsonDoc.spineItemPath = meta.manifestPath + '/' + spineItemMeta.href;
     jsonDoc.href = spineItemMeta.href;
@@ -93,4 +84,9 @@ function htmlToJSON(file) {
 
 function trim(str) {
     return str.replace(/\W/g, ' ').replace(/\s+/g, ' ');
+}
+
+
+function writeAsJSONFile(doc, docdir, fileName) {
+    fs.writeFileSync(docdir + fileName + ".json", JSON.stringify(doc), 'utf8');
 }
