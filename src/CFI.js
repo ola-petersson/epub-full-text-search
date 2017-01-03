@@ -110,7 +110,7 @@ function getElementsThatContainsQuery(searchText, query, $) {
 		
 		shortString = shortString.substring(startindex, stopIndex);
 		*/
-        var endOffset = startOffset + query[0].length;
+        var endOffset = startOffset;
         //var endOffset = startOffset + searchText.length;
         matches.push({textNode: $(this), range: {startOffset: startOffset, endOffset: endOffset}, description: shortString});
     });
