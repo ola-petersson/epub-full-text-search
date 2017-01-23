@@ -1,4 +1,4 @@
-// * phrase search 
+// * phrase search
 // * html teaser with tagged match
 
 module.exports = function (options, callback) {
@@ -35,7 +35,7 @@ var reA = /[^a-zA-Z]/g;
     const preparer = require('./Preparer.js');
     const cfi = require('./CFI.js');
 
-    const INDEX_DB = 'full-text-search-DB'; // path to index-db 
+    const INDEX_DB = 'full-text-search-DB'; // path to index-db
     var defaultOption = {'indexPath': INDEX_DB};
     var options = _.isEmpty(options) ? defaultOption : options;
 
@@ -44,12 +44,12 @@ var reA = /[^a-zA-Z]/g;
 
     searchIndex(options, function (err, si) {
 
-        if (err) 
+        if (err)
             return callback(err, null)
 
         SearchEngine.si = si;
         return callback(null, SearchEngine)
-        
+
     });
 
     SearchEngine.indexing = function (pathToEpubs, callback) {
@@ -91,7 +91,7 @@ var reA = /[^a-zA-Z]/g;
             // check is rebuild indexes necessary -> speed up the auto start
             // Reasons to rebuild the index can be:
             // * new epub content should be index
-            // * index will be generating first time  
+            // * index will be generating first time
 
             if (rebuild) {
                 //    var s = fs.createWriteStream('add.json');
@@ -105,9 +105,9 @@ var reA = /[^a-zA-Z]/g;
     };
 
     SearchEngine.search = function (searchText, q, epubTitle, callback) {
-	
-	
-	
+
+
+
         var epubTitle = epubTitle || DEFAULT_EPUB_TITLE; // if epubTitle undefined return all hits
 
         // q is an array !!!
@@ -121,30 +121,30 @@ var reA = /[^a-zA-Z]/g;
         SearchEngine.si.search(query, stopwords, function (err, result) {
 		var allCfis = [];
 		var arr = [];
-		
+
             if (err)
                 console.error(err);
             if (result.hits) {
                 var hits = [];
                 for (var i in result.hits) { // alla resultat söks igenom men barade som matchar ebubtitle returneras
 
-                    // id = spineitemId:epubTitle 
-                    var title = result.hits[i].document.id.split(':')[1]; // man kan sätta till lower case om man vill .toLowerCase() 
-                   
+                    // id = spineitemId:epubTitle
+                    var title = result.hits[i].document.id.split(':')[1]; // man kan sätta till lower case om man vill .toLowerCase()
+
                     result.hits[i].document.id = result.hits[i].document.id.split(':')[0];
 
 
                     //if (title === epubTitle || epubTitle === '*') {
                     var listOfArguments = result.hits[i].document.spineItemPath.split('/');
-                   
-			if (listOfArguments.indexOf(epubTitle) !== -1 ||  epubTitle === '*') { // kolla om det du skickat med (download_link) matchar något i splineitem 
+
+			if (listOfArguments.indexOf(epubTitle) !== -1 ||  epubTitle === '*') { // kolla om det du skickat med (download_link) matchar något i splineitem
                         //console.log(result.hits[i]);
  			//console.log('epubTitele =' + epubTitle)
                         var data = {
                             "query": q,
                             "spineItemPath": result.hits[i].document.spineItemPath,
                             "baseCfi": result.hits[i].document.baseCfi
-                            
+
                         };
 						//console.log(result.hits[i].document.spineItemPath);
 						var cfiList = cfi.generate(searchText, data);
@@ -155,13 +155,13 @@ var reA = /[^a-zA-Z]/g;
 							delete result.hits[i].document['*'];
 							delete result.hits[i].document.spineItemPath;
 						}
-						
-						
-					}	
+
+
+					}
                 }
-           		
+
 			callback(hits);
-			
+
             }
         })
     };
@@ -189,7 +189,7 @@ var reA = /[^a-zA-Z]/g;
     };
 
 
-    // private 
+    // private
     function getIndexOptions() {
 
         var options = {};
@@ -217,7 +217,7 @@ var reA = /[^a-zA-Z]/g;
                 }
             }
             console.log("It is not necessary to rebuild indexes.");
-            return callback(false); // ändra till false om man inte vill reindexera allt varje gång 
+            return callback(false); // ändra till false om man inte vill reindexera allt varje gång
         });
     }
 

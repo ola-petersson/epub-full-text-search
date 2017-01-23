@@ -1,12 +1,16 @@
-const express = require('express'),
+const express = require('express');
+
 	searchEngine = require('../../../');
-	var searchText; 
+	var searchText;
 
-
+	process.on('uncaughtException', function (err) {
+	  console.error(err);
+	  console.log("Node NOT Exiting...");
+	});
 var SampleService = function () {
  	var self = this;
     	self.app = express();
- 
+
 	function setupVariables() {
 
 	//	self.ipaddress = process.env.IP;
@@ -25,18 +29,18 @@ var SampleService = function () {
 		        res.status(500).send('Can`t found query parameter q -> /search?q=word');
 		        return;
 		    }
-			
-			
+
+
 			//console.log(req.query['q'].toLowerCase());
 			searchText = req.query['q'].toLowerCase();
-		    //console.log( req.query['q']) 
+		    //console.log( req.query['q'])
 		    console.log('searchText = ' + searchText);
-		    
+
 		    var q = req.query['q'].toLowerCase().replace(/å/g, ' ').replace(/ä/g, ' ').replace(/ö/g, ' ').replace(/\./g,' ').replace(/\,/g,' ').replace(/\-/g,' ').split(/\s+/);
-		    
+
 		    console.log('q = ' + q);
-		    
-		    
+
+
 		    var bookTitle = req.query['t'];
 			console.log('booktitle = ' +bookTitle);
 		    bookTitle = bookTitle || '*'; // if bookTitle undefined return all hits
@@ -93,13 +97,13 @@ var SampleService = function () {
 
     	self.startIndexing = function () {
 
-        	//var node_modules_path = require.resolve('body-parser').split('body-parser')[0]; // absolute path 
+        	//var node_modules_path = require.resolve('body-parser').split('body-parser')[0]; // absolute path
         	//var epubs = node_modules_path + 'epub3-samples';
-       		var epubs = '/var/www/instudy/content/books';
+       		var epubs = '/home/viktor/Documents/Instudy/www/content/books';
 
         	if (process.env.DEBUG) {
             		console.log("debug mode");
-            		epubs = '/var/www/instudy/content/books';
+            		epubs = '/home/viktor/Documents/Instudy/www/content/books';
         		}
 
         	searchEngine({}, function (err, se) {
@@ -119,12 +123,13 @@ var SampleService = function () {
             		}
         	});
     	};
-	
+
 	self.init = function () {
-        	setupVariables();
+    setupVariables();
 		setupTerminationHandlers();
 		initServer();
     	};
+
 	self.start = function () {
 		//Start the app on the specific interface (and port).
 		self.app.listen(self.port, self.ipaddress, function () {
@@ -132,17 +137,10 @@ var SampleService = function () {
 		      Date(Date.now()), self.ipaddress, self.port);
 		});
 	    };
-	
+
 
 };
-
-
 var sase = new SampleService();
 sase.startIndexing();
 sase.init();
 sase.start();
-
-
-
-
-
